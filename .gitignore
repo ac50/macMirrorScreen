@@ -1,0 +1,12 @@
+# Never publish local docs or the folder-local GitHub login
+docs/
+.gh/
+
+# Swift / SwiftPM
+.build/
+.swiftpm/
+*.xcodeproj
+Package.resolved
+
+# macOS
+.DS_Store
