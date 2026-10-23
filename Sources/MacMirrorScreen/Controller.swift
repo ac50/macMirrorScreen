@@ -4,7 +4,6 @@ import MirrorCore
 /// Owns the event sources (display reconfiguration, wake, watchdog) and executes the planner's actions.
 final class Controller {
     let configURL: URL
-    private let defaults = UserDefaults.standard
     private var debounce: Timer?
     private var watchdog: Timer?
 
@@ -12,13 +11,19 @@ final class Controller {
         self.configURL = configURL
     }
 
+    private var stateURL: URL { DimState.url(besideConfig: configURL) }
+
     /// Non-nil while we have dimmed the panel; the value is the brightness to restore.
-    /// Persisted so a relaunch after a crash or kill still knows to restore.
-    var savedBrightness: Float? {
-        get { defaults.object(forKey: "savedBrightness") as? Float }
-        set {
-            if let newValue { defaults.set(newValue, forKey: "savedBrightness") }
-            else { defaults.removeObject(forKey: "savedBrightness") }
+    /// Persisted beside the config so a relaunch after a crash or kill still knows to restore.
+    var savedBrightness: Float? { DimState.load(from: stateURL) }
+
+    private func setSavedBrightness(_ value: Float?) -> Bool {
+        do {
+            try DimState.save(value, to: stateURL)
+            return true
+        } catch {
+            log("cannot write dim marker: \(error)")
+            return false
         }
     }
 
@@ -28,13 +33,20 @@ final class Controller {
         for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification] {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.scheduleEvaluate() }
         }
-        watchdog = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in self?.watchdogTick() }
+        watchdog = timer(10, repeats: true) { [weak self] in self?.watchdogTick() }
         if !Brightness.available { log("DisplayServices brightness unavailable; the built-in panel will never be dimmed") }
+
+        // Launch net: a dark, un-mirrored panel is never wanted, whoever dimmed it (covers a lost marker).
+        if let builtin = Displays.snapshot().first(where: \.isBuiltin), builtin.mirrorsDisplayID == 0,
+           (Brightness.get(builtin.id) ?? 1) < 0.01 {
+            log("launch: built-in panel is dark and not mirrored; restoring")
+            restoreNow()
+        }
         evaluate()
     }
 
     func shutdown() {
-        restoreNow()
+        if savedBrightness != nil { restoreNow() }
         CGDisplayRemoveReconfigurationCallback(reconfigurationCallback, Unmanaged.passUnretained(self).toOpaque())
     }
 
@@ -42,7 +54,7 @@ final class Controller {
     func scheduleEvaluate() {
         DispatchQueue.main.async {
             self.debounce?.invalidate()
-            self.debounce = Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in self?.evaluate() }
+            self.debounce = self.timer(1, repeats: false) { [weak self] in self?.evaluate() }
         }
     }
 
@@ -83,15 +95,15 @@ final class Controller {
                 log("cannot read built-in brightness; not dimming")
                 return false
             }
-            if savedBrightness == nil { savedBrightness = current }  // a re-dim keeps the original value
+            // The marker must be durable before the panel goes dark; a re-dim keeps the original value.
+            guard savedBrightness != nil || setSavedBrightness(current) else { return false }
             if Brightness.set(builtin, 0) { return true }
-            savedBrightness = nil
+            _ = setSavedBrightness(nil)
             return false
         case .restore(let builtin):
             guard savedBrightness != nil else { return true }
             guard Brightness.set(builtin, restoreValue(saved: savedBrightness)) else { return false }
-            savedBrightness = nil
-            return true
+            return setSavedBrightness(nil)
         }
     }
 
@@ -106,9 +118,16 @@ final class Controller {
         evaluate()
     }
 
-    /// Lights the panel and stops managing it until the next display event re-evaluates.
+    /// Explicit escape (menu, launch, quit): lights the panel if it is dark, whoever dimmed it,
+    /// and stops managing it until the next display event re-evaluates.
     func restoreNow() {
-        if let builtin = Displays.snapshot().first(where: \.isBuiltin) { execute(.restore(builtin: builtin.id)) }
+        guard let builtin = Displays.snapshot().first(where: \.isBuiltin) else {
+            log("restore requested but the built-in display is offline (lid closed?); keeping the marker")
+            return
+        }
+        let target = restoreValue(saved: savedBrightness)
+        _ = setSavedBrightness(nil)
+        if (Brightness.get(builtin.id) ?? 0) < target { _ = Brightness.set(builtin.id, target) }
     }
 
     /// Only active while we have dimmed the panel; see `maintain` for the two cases it covers.
@@ -120,6 +139,13 @@ final class Controller {
             log("watchdog: \(action)")
             execute(action)
         }
+    }
+
+    /// Timers in the common run-loop mode keep firing while the status-bar menu is open.
+    private func timer(_ interval: TimeInterval, repeats: Bool, _ block: @escaping () -> Void) -> Timer {
+        let timer = Timer(timeInterval: interval, repeats: repeats) { _ in block() }
+        RunLoop.main.add(timer, forMode: .common)
+        return timer
     }
 
     private func save(_ config: Config) {

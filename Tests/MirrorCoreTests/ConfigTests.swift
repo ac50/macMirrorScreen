@@ -30,6 +30,16 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(try Config.load(from: url), config)
     }
 
+    func testDimStateRoundTripAndRemoval() throws {
+        let url = DimState.url(besideConfig: dir.appendingPathComponent("config.json"))
+        XCTAssertNil(DimState.load(from: url))
+        try DimState.save(0.8, to: url)
+        XCTAssertEqual(DimState.load(from: url), 0.8)
+        try DimState.save(nil, to: url)
+        XCTAssertNil(DimState.load(from: url))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
     func testLoadCorruptThrows() throws {
         let url = dir.appendingPathComponent("config.json")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

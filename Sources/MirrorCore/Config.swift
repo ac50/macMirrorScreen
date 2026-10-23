@@ -47,3 +47,27 @@ public struct Config: Codable, Equatable {
         try encoder.encode(self).write(to: url, options: .atomic)
     }
 }
+
+/// Marker that we dimmed the panel, holding the brightness to restore. A plain text file beside the
+/// config, so a bundled app and a bare binary (different UserDefaults domains) share one truth.
+public enum DimState {
+    public static func url(besideConfig configURL: URL) -> URL {
+        configURL.deletingLastPathComponent().appendingPathComponent("dimmed-brightness")
+    }
+
+    public static func load(from url: URL) -> Float? {
+        (try? String(contentsOf: url, encoding: .utf8))
+            .flatMap { Float($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    }
+
+    /// `nil` removes the marker.
+    public static func save(_ value: Float?, to url: URL) throws {
+        guard let value else {
+            if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+            return
+        }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "\(value)".write(to: url, atomically: true, encoding: .utf8)
+    }
+}

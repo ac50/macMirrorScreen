@@ -67,6 +67,10 @@ or scaling may change; adjust it once in System Settings → Displays and macOS 
 The key is `vendor-model-serial` as reported by CoreGraphics; the serial is often `0`, so two
 identical monitors share one entry. `mode` is `none` or `mirror`.
 
+The file `~/.config/macmirrorscreen/dimmed-brightness` exists only while the tool has dimmed the
+panel and holds the brightness to restore; it is written before the panel goes dark and removed
+after it is restored, so a crash or a kill never loses the value.
+
 ## If the panel is dark
 
 1. Press the brightness-up key: the panel is only dimmed, never disabled.
