@@ -146,8 +146,10 @@ final class Controller {
     }
 
     /// Timers in the common run-loop mode keep firing while the status-bar menu is open.
+    /// The tolerance lets the kernel coalesce our wakeups with other timers (Apple's energy guidance).
     private func timer(_ interval: TimeInterval, repeats: Bool, _ block: @escaping () -> Void) -> Timer {
         let timer = Timer(timeInterval: interval, repeats: repeats) { _ in block() }
+        timer.tolerance = interval * 0.2
         RunLoop.main.add(timer, forMode: .common)
         return timer
     }
