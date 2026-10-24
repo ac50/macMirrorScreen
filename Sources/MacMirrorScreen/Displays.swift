@@ -39,7 +39,10 @@ enum Displays {
             log("display \(master) is itself a mirror; releasing it so that it can be the mirror source")
             guard configure(master, mirrorOf: nullDisplay) else { return false }
         }
-        return configure(display, mirrorOf: master) && CGDisplayMirrorsDisplay(display) == master
+        guard configure(display, mirrorOf: master) else { return false }
+        let primary = CGDisplayMirrorsDisplay(display)
+        if primary != master { log("display \(display) mirrors \(primary) instead of \(master) after re-arranging") }
+        return primary == master
     }
 
     static func unmirror(_ display: CGDirectDisplayID) -> Bool {
@@ -64,7 +67,12 @@ enum Displays {
         let screen = NSScreen.screens.first {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == id
         }
-        return screen?.localizedName ?? "Display \(id)"
+        return screen?.localizedName ?? fallbackName(id)
+    }
+
+    /// The name of a display without a screen of its own, such as an external that mirrors the panel.
+    static func fallbackName(_ id: CGDirectDisplayID) -> String {
+        "Display \(id)"
     }
 }
 

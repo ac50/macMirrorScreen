@@ -47,8 +47,8 @@ Quit MacMirrorScreen
 Choosing *Mirror built-in and turn it off* applies it immediately and remembers it. While a display is
 in mirror mode the panel is kept dark: if macOS, ambient-light compensation or a brightness key
 turns it back up, the watchdog dims it again within 10 s. To light the panel while docked use
-*Restore built-in display now* (it stays lit until the next display change) or switch the display
-to *Do nothing*.
+*Restore built-in display now* (it stays lit until the next display change or wake) or switch the
+display to *Do nothing*.
 
 The panel is the mirror source, so the external monitor shows the panel's picture at a resolution
 taken from the panel and may show black bars. To change the picture size, pick another resolution for
@@ -91,6 +91,9 @@ dims. A disconnect mode may arrive later as an explicit opt-in.
 2. Click the menu-bar icon → *Restore built-in display now*.
 3. Relaunch the app: on launch it restores the panel when no mirrored external is online.
 
+Quitting or shutting down with the lid closed cannot relight the panel, because it is offline then.
+It comes back on at the tool's next launch, or with the brightness keys.
+
 Logs go to Console.app (subsystem `io.github.ac50.MacMirrorScreen`) and to stderr when run
 from a terminal.
 
@@ -117,6 +120,7 @@ MacMirrorScreen 是一个只有状态栏图标的小工具：外接显示器插�
 
 保底策略：内置屏幕只会被调暗到 0，从不被禁用，所以键盘亮度键随时可用；拔出、唤醒、退出、收到 SIGTERM、
 崩溃后再次启动、每 10 秒的看门狗以及菜单中的 "Restore built-in display now" 都会恢复亮度，且恢复值不低于 30%。
+合盖状态下退出或关机时内置屏离线，无法点亮；下次启动本工具或按亮度键即可恢复。
 
 安装：解压后先移动到 `/Applications` 再启动；未经公证，首次打开需执行
 `xattr -dr com.apple.quarantine /Applications/MacMirrorScreen.app` 或在"隐私与安全性"中点击"仍要打开"。

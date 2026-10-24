@@ -100,10 +100,12 @@ final class Controller {
                 log("cannot read built-in brightness; not dimming")
                 return false
             }
-            // The marker must be durable before the panel goes dark; a re-dim keeps the original value.
-            guard savedBrightness != nil || setSavedBrightness(current) else { return false }
+            // The marker must be durable before the panel goes dark; a re-dim keeps the original value,
+            // also when it fails, so the saved brightness and every restore net survive.
+            let firstDim = savedBrightness == nil
+            guard !firstDim || setSavedBrightness(current) else { return false }
             if Brightness.set(builtin, 0) { return true }
-            _ = setSavedBrightness(nil)
+            if firstDim { _ = setSavedBrightness(nil) }
             return false
         case .restore(let builtin):
             guard savedBrightness != nil else { return true }
@@ -113,10 +115,15 @@ final class Controller {
     }
 
     func setMode(_ mode: Mode, for display: Display) {
-        var config = currentConfig()
-        // Keep a name already on file: an external that mirrors the panel has no screen of its own,
-        // so its live name can be the "Display <id>" fallback.
-        let name = config.displays[display.key]?.name ?? display.name
+        // Like evaluate(), never overwrite a config file that does not parse.
+        guard var config = try? Config.load(from: configURL) else {
+            log("config unreadable; mode not changed, fix the file first")
+            return
+        }
+        // An external that mirrors the panel has no screen of its own, so its live name is only the
+        // fallback; keep the name on file then.
+        var name = display.name
+        if name == Displays.fallbackName(display.id), let known = config.displays[display.key]?.name { name = known }
         config.displays[display.key] = DisplayEntry(name: name, mode: mode)
         save(config)
         if mode == .none {
@@ -135,15 +142,21 @@ final class Controller {
     }
 
     /// Explicit escape (menu, launch, quit): lights the panel if it is dark, whoever dimmed it,
-    /// and stops managing it until the next display event re-evaluates.
+    /// and stops managing it until the next display event re-evaluates. The marker goes only once the
+    /// panel is lit: while it stays dark and nothing mirrors it, the marker keeps the watchdog retrying.
     func restoreNow() {
-        guard let builtin = Displays.snapshot().first(where: \.isBuiltin) else {
+        let displays = Displays.snapshot()
+        guard let builtin = displays.first(where: \.isBuiltin) else {
             log("restore requested but the built-in display is offline (lid closed?); keeping the marker")
             return
         }
         let target = restoreValue(saved: savedBrightness)
-        _ = setSavedBrightness(nil)
-        if (Brightness.get(builtin.id) ?? 0) < target { _ = Brightness.set(builtin.id, target) }
+        if (Brightness.get(builtin.id) ?? 0) >= target || Brightness.set(builtin.id, target) {
+            _ = setSavedBrightness(nil)
+        } else {
+            log("relighting the built-in panel failed; the watchdog retries while nothing mirrors it")
+            if savedBrightness == nil, !builtinIsMirrored(displays) { _ = setSavedBrightness(target) }
+        }
     }
 
     /// Runs after every evaluation and on each watchdog tick, only while we have dimmed the panel;
