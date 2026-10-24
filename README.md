@@ -1,12 +1,14 @@
 # MacMirrorScreen
 
 A tiny menu-bar utility for Apple Silicon MacBooks docked to one external monitor.
-Plug the monitor in and the built-in panel mirrors it and goes dark; unplug it and the
-panel comes back on. No windows, no settings UI: one status-bar icon and a text config file.
+Plug the monitor in and it becomes a mirror of the built-in panel, which goes dark while
+staying the main display; unplug it and the panel comes back on. No windows, no settings UI:
+one status-bar icon and a text config file.
 
-- **Mirror mode**: the built-in panel becomes a mirror of the external display, then its
-  backlight is turned off. The panel is never *disabled*, only dimmed to 0, so it can always be
-  brought back.
+- **Mirror mode**: the external display becomes a mirror of the built-in panel (System Settings
+  calls this *Mirror for Built-in Display*), so the panel stays the main display and keeps its
+  layout; then the panel's backlight is turned off. The panel is never *disabled*, only dimmed
+  to 0, so it can always be brought back.
 - **Remembered per display**: each external monitor gets an entry in the config file; pick
   its mode once from the menu and it is applied automatically on every later plug.
 - **Safety nets** so the panel cannot stay dark: restore on unplug, on wake, on quit or
@@ -33,7 +35,7 @@ Click the `display.2` icon in the menu bar:
 ```
 External: DELL U2723QE
     Do nothing
-  ✓ Mirror and turn off built-in
+  ✓ Mirror built-in and turn it off
 ──────────────
 Restore built-in display now
 Open config file
@@ -42,14 +44,17 @@ Launch at Login
 Quit MacMirrorScreen
 ```
 
-Choosing *Mirror and turn off built-in* applies it immediately and remembers it. While a display is
+Choosing *Mirror built-in and turn it off* applies it immediately and remembers it. While a display is
 in mirror mode the panel is kept dark: if macOS, ambient-light compensation or a brightness key
 turns it back up, the watchdog dims it again within 10 s. To light the panel while docked use
 *Restore built-in display now* (it stays lit until the next display change) or switch the display
 to *Do nothing*.
 
-Mirroring lets macOS pick a mirror-capable mode for the pair, so the external monitor's resolution
-or scaling may change; adjust it once in System Settings → Displays and macOS remembers it.
+The panel is the mirror source, so the external monitor shows the panel's picture at a resolution
+taken from the panel and may show black bars. To change the picture size, pick another resolution for
+the built-in display in System Settings → Displays; macOS remembers it. Do not make the external the
+display being mirrored there (for example *Optimize for* the external monitor): the tool switches that
+back at the next display change. To leave the arrangement to macOS, set the display to *Do nothing*.
 
 ## Config file
 
@@ -101,9 +106,14 @@ brightness calls (loaded with `dlopen`, no link-time dependency), the event loop
 
 ## 中文说明
 
-MacMirrorScreen 是一个只有状态栏图标的小工具：外接显示器插入时，内置屏幕自动镜像到外接屏并关闭背光；
-拔出时内置屏幕自动恢复。配置是 `~/.config/macmirrorscreen/config.json` 文本文件，每台外接屏一条记录，
-`mode` 为 `none` 或 `mirror`，在菜单里选一次即记住。
+MacMirrorScreen 是一个只有状态栏图标的小工具：外接显示器插入时，自动把外接屏设为内置屏幕的镜像
+（内置屏仍是主显示器），然后关闭内置屏背光；拔出时内置屏幕自动恢复。配置是
+`~/.config/macmirrorscreen/config.json` 文本文件，每台外接屏一条记录，`mode` 为 `none` 或 `mirror`，
+在菜单里选一次即记住。
+
+镜像时内置屏是镜像源，外接屏显示内置屏的画面，分辨率跟随内置屏，可能出现黑边；要调整画面大小，请在系统设置里
+改内置屏的分辨率。若在系统设置里把外接屏改成被镜像的一方，工具会在下一次显示变化时改回来；不想让工具管理时选
+"Do nothing"。
 
 保底策略：内置屏幕只会被调暗到 0，从不被禁用，所以键盘亮度键随时可用；拔出、唤醒、退出、收到 SIGTERM、
 崩溃后再次启动、每 10 秒的看门狗以及菜单中的 "Restore built-in display now" 都会恢复亮度，且恢复值不低于 30%。

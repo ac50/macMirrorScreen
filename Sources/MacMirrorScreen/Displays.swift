@@ -30,13 +30,20 @@ enum Displays {
         }
     }
 
-    /// Makes `builtin` a mirror of `master`; true only when CoreGraphics confirms the new arrangement.
-    static func mirror(builtin: CGDirectDisplayID, master: CGDirectDisplayID) -> Bool {
-        configure(builtin, mirrorOf: master) && CGDisplayMirrorsDisplay(builtin) == master
+    /// Makes `display` a mirror of `master`: the external a mirror of the built-in panel, so the panel
+    /// stays the main display. True only when CoreGraphics confirms the new arrangement.
+    /// A master that is itself a mirror (how v0 left the panel) is released first, in its own
+    /// transaction, so the new mirror set has one unambiguous primary.
+    static func mirror(_ display: CGDirectDisplayID, of master: CGDirectDisplayID) -> Bool {
+        if CGDisplayMirrorsDisplay(master) != nullDisplay {
+            log("display \(master) is itself a mirror; releasing it so that it can be the mirror source")
+            guard configure(master, mirrorOf: nullDisplay) else { return false }
+        }
+        return configure(display, mirrorOf: master) && CGDisplayMirrorsDisplay(display) == master
     }
 
-    static func unmirror(builtin: CGDirectDisplayID) -> Bool {
-        configure(builtin, mirrorOf: nullDisplay)
+    static func unmirror(_ display: CGDirectDisplayID) -> Bool {
+        configure(display, mirrorOf: nullDisplay)
     }
 
     private static func configure(_ display: CGDirectDisplayID, mirrorOf master: CGDirectDisplayID) -> Bool {

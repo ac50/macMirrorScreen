@@ -35,10 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let externals = Displays.snapshot().filter { !$0.isBuiltin }
         if externals.isEmpty { menu.addItem(headerItem("No external display")) }
         for display in externals {
-            menu.addItem(headerItem("External: \(display.name)"))
-            let current = config.displays[display.key]?.mode ?? Mode.none
+            let entry = config.displays[display.key]
+            // The name on file: while the external mirrors the panel it has no screen, hence no live name.
+            menu.addItem(headerItem("External: \(entry?.name ?? display.name)"))
+            let current = entry?.mode ?? Mode.none
             for mode in Mode.allCases {
-                let choice = actionItem(mode == .mirror ? "Mirror and turn off built-in" : "Do nothing", #selector(chooseMode(_:)))
+                let choice = actionItem(mode == .mirror ? "Mirror built-in and turn it off" : "Do nothing", #selector(chooseMode(_:)))
                 choice.representedObject = ModeChoice(display: display, mode: mode)
                 choice.state = mode == current ? .on : .off
                 choice.indentationLevel = 1

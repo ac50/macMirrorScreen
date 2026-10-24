@@ -36,8 +36,9 @@ final class Controller {
         watchdog = timer(10, repeats: true) { [weak self] in self?.maintainPass() }
         if !Brightness.available { log("DisplayServices brightness unavailable; the built-in panel will never be dimmed") }
 
-        // Launch net: a dark, un-mirrored panel is never wanted, whoever dimmed it (covers a lost marker).
-        if let builtin = Displays.snapshot().first(where: \.isBuiltin), builtin.mirrorsDisplayID == 0,
+        // Launch net: a dark panel that no external mirrors is never wanted, whoever dimmed it (covers a lost marker).
+        let displays = Displays.snapshot()
+        if let builtin = displays.first(where: \.isBuiltin), !builtinIsMirrored(displays),
            (Brightness.get(builtin.id) ?? 1) < 0.01 {
             log("launch: built-in panel is dark and not mirrored; restoring")
             restoreNow()
@@ -78,11 +79,12 @@ final class Controller {
             if case .remember(let key, let name) = action {
                 updated.displays[key] = DisplayEntry(name: name, mode: .none)
             } else if !execute(action) {
-                return  // a failed mirror must not be followed by a dim
+                break  // a failed mirror must not be followed by a dim
             }
         }
-        // Waking the displays often brings the panel back at a faint brightness; re-assert now
-        // instead of leaving it to the next watchdog tick.
+        // Also after a failure: a dark panel that no external mirrors (say a re-arrangement that stopped
+        // half-way) is relit now, not at the next watchdog tick. Waking the displays often brings the
+        // panel back at a faint brightness; that is re-dimmed here too.
         maintainPass()
     }
 
@@ -91,8 +93,8 @@ final class Controller {
         switch action {
         case .remember:
             return true
-        case .mirror(let builtin, let master):
-            return Displays.mirror(builtin: builtin, master: master)
+        case .mirror(let external, let builtin):
+            return Displays.mirror(external, of: builtin)
         case .dim(let builtin):
             guard let current = Brightness.get(builtin) else {
                 log("cannot read built-in brightness; not dimming")
@@ -112,11 +114,22 @@ final class Controller {
 
     func setMode(_ mode: Mode, for display: Display) {
         var config = currentConfig()
-        config.displays[display.key] = DisplayEntry(name: display.name, mode: mode)
+        // Keep a name already on file: an external that mirrors the panel has no screen of its own,
+        // so its live name can be the "Display <id>" fallback.
+        let name = config.displays[display.key]?.name ?? display.name
+        config.displays[display.key] = DisplayEntry(name: name, mode: mode)
         save(config)
-        if mode == .none, let builtin = Displays.snapshot().first(where: \.isBuiltin),
-           builtin.mirrorsDisplayID == display.id {
-            _ = Displays.unmirror(builtin: builtin.id)
+        if mode == .none {
+            let displays = Displays.snapshot()
+            if let builtin = displays.first(where: \.isBuiltin),
+               let external = displays.first(where: { $0.id == display.id }) {
+                // Release whichever side is the mirror, including the reverse arrangement v0 left behind.
+                if external.mirrorsDisplayID == builtin.id {
+                    _ = Displays.unmirror(external.id)
+                } else if builtin.mirrorsDisplayID == external.id {
+                    _ = Displays.unmirror(builtin.id)
+                }
+            }
         }
         evaluate()
     }
