@@ -33,7 +33,7 @@ final class Controller {
         for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification] {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.scheduleEvaluate() }
         }
-        watchdog = timer(10, repeats: true) { [weak self] in self?.watchdogTick() }
+        watchdog = timer(10, repeats: true) { [weak self] in self?.maintainPass() }
         if !Brightness.available { log("DisplayServices brightness unavailable; the built-in panel will never be dimmed") }
 
         // Launch net: a dark, un-mirrored panel is never wanted, whoever dimmed it (covers a lost marker).
@@ -81,6 +81,9 @@ final class Controller {
                 return  // a failed mirror must not be followed by a dim
             }
         }
+        // Waking the displays often brings the panel back at a faint brightness; re-assert now
+        // instead of leaving it to the next watchdog tick.
+        maintainPass()
     }
 
     @discardableResult
@@ -130,13 +133,14 @@ final class Controller {
         if (Brightness.get(builtin.id) ?? 0) < target { _ = Brightness.set(builtin.id, target) }
     }
 
-    /// Only active while we have dimmed the panel; see `maintain` for the two cases it covers.
-    private func watchdogTick() {
+    /// Runs after every evaluation and on each watchdog tick, only while we have dimmed the panel;
+    /// see `maintain` for the two cases it covers.
+    private func maintainPass() {
         guard savedBrightness != nil else { return }
         let displays = Displays.snapshot()
         let brightness = displays.first(where: \.isBuiltin).flatMap { Brightness.get($0.id) }
         if let action = maintain(displays: displays, brightness: brightness) {
-            log("watchdog: \(action)")
+            log("maintain: \(action)")
             execute(action)
         }
     }

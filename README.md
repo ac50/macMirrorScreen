@@ -71,6 +71,15 @@ The file `~/.config/macmirrorscreen/dimmed-brightness` exists only while the too
 panel and holds the brightness to restore; it is written before the panel goes dark and removed
 after it is restored, so a crash or a kill never loses the value.
 
+## Why dim instead of disconnect
+
+BetterDisplay, Lunar and blackoutd can remove the built-in panel from the display layout
+through a private WindowServer API. That keeps the external monitor's own resolution, but the
+disabled state lives in the WindowServer connection of the running process: if that process is
+killed, the panel cannot be re-enabled until displays re-enumerate (replug the monitor, or log
+out). Because this tool's first rule is that the panel must always come back, v1 only mirrors and
+dims. A disconnect mode may arrive later as an explicit opt-in.
+
 ## If the panel is dark
 
 1. Press the brightness-up key: the panel is only dimmed, never disabled.
